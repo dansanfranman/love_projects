@@ -6,7 +6,7 @@ local cardScale = 0.1
 function Card:new(value, suit, back, front)
 	self.value = value
 	self.suit = suit
-	self.back = love.graphics.newImage(back)
+	self.back = back
 	self.front = love.graphics.newImage(front)
 	self.currentImage = self.back
 	self.originX = self.currentImage:getWidth() * 0.5

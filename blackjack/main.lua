@@ -12,6 +12,7 @@ local suits = {
 	"heart",
 	}
 
+local game_over_text
 local score = 0
 local dealer_score = 0
 local show_dealer_score = false
@@ -24,7 +25,13 @@ local restart_game_timer = 0
 local actions = {}
 local hit_button, stand_button, double_down_button, surrender_button
 
+local lose_sfx, win_sfx, card_sfx
+local cascades = {}
+local cascade_draw_index = 1
+local card_back
+
 function restart()
+	disable_input = true
 	for card = 1, #deck do
 		deck[card]:moveToPosition({x = 0, y = 2000})
 	end
@@ -47,21 +54,31 @@ function restart()
 
 	this_bet = 0
 
-	disable_input = false
 	restart_game_timer = 0
 
 	loadGame()
+	disable_input = false
 end
 
 function loadGame()
+	win_sfx = love.audio.newSource("assets/sfx/level_up.wav", "static")
+	lose_sfx = love.audio.newSource("assets/sfx/ghostly_laugh.wav", "static")
+	card_sfx = 
+	{
+		love.audio.newSource("assets/sfx/sndHit1.wav", "static"),
+		love.audio.newSource("assets/sfx/sndHit2.wav", "static"),
+		love.audio.newSource("assets/sfx/sndHit3.wav", "static"),
+		love.audio.newSource("assets/sfx/sndHit4.wav", "static")
+	}
+	game_over_text = ""
 	deck = {}
 	hand = {}
 	dealerHand = {}
 
 	screen_width, screen_height = love.graphics.getDimensions()
 	buildDeck()
-	adjustDeck()
 	shuffleDeck()
+	adjustDeck()
 
 	local button_start = 25
 	
@@ -75,7 +92,7 @@ function loadGame()
 	this_bet = initial_bet
 
 	-- draw first 2 cards
-	local draw_action = Action(draw, 1, 1, Action(draw, 1, 1))
+	local draw_action = Action(draw, 1, 0.25, Action(draw, 1, 1))
 	table.insert(actions, draw_action)
 end
 
@@ -112,9 +129,10 @@ function createSurrenderButton(button_start)
 end
 
 function buildDeck()
+	card_back = love.graphics.newImage("assets/cards/card_back_dark_inner.png")
 	for index, suit in ipairs(suits) do
 		for cardIndex = 1, 13 do
-			local card = Card(cardIndex, suit, "assets/cards/card_back_dark_inner.png", "assets/cards/card_" .. suit .. "_" .. cardIndex .. ".png")
+			local card = Card(cardIndex, suit, card_back, "assets/cards/card_" .. suit .. "_" .. cardIndex .. ".png")
 			table.insert(deck, card)
 		end
 	end
@@ -168,6 +186,48 @@ function checkRestartTimer(dt)
 	end
 end
 
+function createCascadeIn()
+	cascade_timer = love.timer.getTime()
+	local actionFunc = function(parent, dt) 
+							local last_pos = cascades[#cascades]
+							local new_pos
+							if last_pos then
+								new_pos = {x = last_pos.x + 60, y = last_pos.y}
+							else
+								new_pos = {x = -30, y = -30}
+							end
+							if new_pos.x > screen_width then
+								new_pos.x = 0
+								new_pos.y = new_pos.y + 75
+							end
+							if new_pos.y <= screen_height then
+								table.insert(cascades, new_pos)
+								parent.count = parent.count + 1
+							else
+								local diff = love.timer.getTime() - cascade_timer
+								restart_game_timer = diff
+								createCascadeOut()
+							end
+						end
+
+	local action = Action(actionFunc, 1, 0.01, nil)						
+	table.insert(actions, action)
+end
+
+function createCascadeOut()
+	local actionFunc = function(parent)
+							if cascade_draw_index < #cascades then
+								cascade_draw_index = cascade_draw_index + 1
+								parent.count = parent.count + 1
+							else
+								cascades = {}
+								cascade_draw_index = 1
+							end
+						end
+	local action = Action(actionFunc, 1, 0.01, nil)
+	table.insert(actions, action)
+end
+
 function love.draw()
 	for button = 1, #buttons do
 		buttons[button]:draw()
@@ -185,11 +245,14 @@ function love.draw()
 		dealerHand[card]:draw()
 	end
 
+	love.graphics.print(game_over_text, screen_width * 0.75, screen_height * 0.5 - 20)
 	love.graphics.print("score: " .. score, screen_width * 0.75, screen_height * 0.5)
 	if show_dealer_score then
 		love.graphics.print("dealer score: " .. dealer_score, screen_width * 0.75, screen_height * 0.5 + 20)
 	end
 	love.graphics.print("cash: " .. cash, screen_width * 0.75, screen_height * 0.5 + 40)
+
+	drawCascade()
 end
 
 function printDeck()
@@ -212,6 +275,7 @@ function draw()
 	local card = deck[#deck]
 	card:faceUp()
 	score = score + card:getValue(score)
+	card_sfx[love.math.random(1, 4)]:play()
 	table.insert(hand, card)
 	table.remove(deck, #deck)
 
@@ -221,11 +285,13 @@ function draw()
 	local text
 	if score > 21 then
 		text = "You Bust!"
+		lose_sfx:play()
 		setupRestart(text)
-	else if score == 21 then
+		return false
+	elseif score == 21 then
 		stand()
 	end
-end
+	return true 
 end
 
 function dealerDraw()
@@ -233,6 +299,7 @@ function dealerDraw()
 	card:faceUp()
 	table.insert(dealerHand, card)
 	table.remove(deck, #deck)
+	card_sfx[love.math.random(1, 4)]:play()
 
 	adjustDealerHand()
 	adjustDeck()
@@ -253,11 +320,13 @@ function stand()
 
 	local continueWithFunc = function(parentAction)
 		local text
-		if dealer_score > 21 then
+		if dealer_score > 21 or score > dealer_score then
 			cash = cash + 2 * this_bet
 			text = "You Win!"
+			win_sfx:play()
 		elseif dealer_score == 21 or dealer_score > score then
 			text = "You Lose!"
+			lose_sfx:play()
 		else
 			text = "You Drew!"
 			cash = cash + this_bet
@@ -279,8 +348,9 @@ function doubleDown()
 	if #hand <= 2 and cash > initial_bet then
 		cash = cash - initial_bet
 		this_bet = this_bet + initial_bet
-		draw()
-		stand()
+		if draw() then -- returns true unless drawing busts us
+			stand()
+		end
 	end
 end
 
@@ -291,9 +361,10 @@ function surrender()
 end
 
 function setupRestart(text)
+	createCascadeIn()
 	disable_input = true
-	score = text
-	restart_game_timer = 3
+	game_over_text = text
+	restart_game_timer = 30
 end
 
 function adjustDealerHand()
@@ -318,5 +389,12 @@ function adjustDeck()
 
 	for card = 1, #deck do
 		deck[card]:moveToPosition({x = 0.5 * screen_width + offset * card - 0.5 * total_offset, y = 100})
+	end
+end
+
+function drawCascade()
+--	print(cascade_draw_index)
+	for position = cascade_draw_index, #cascades do
+		love.graphics.draw(card_back, cascades[position].x, cascades[position].y, 0.15, 0.15, 0.15)
 	end
 end
