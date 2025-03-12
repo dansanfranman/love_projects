@@ -1,7 +1,7 @@
 local Object = require("classic")
 local Card = Object.extend(Object)
 
-local cardScale = 0.1
+local cardScale = 0.15
 
 function Card:new(value, suit, back, front)
 	self.value = value
@@ -39,7 +39,6 @@ function Card:update(dt)
 end
 
 function Card:getValue(score)
-	print(self.value, score)
 	if self.value == 1 and score <= 10 then
 		return 11
 	else

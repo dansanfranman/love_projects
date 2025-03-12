@@ -23,7 +23,7 @@ local disable_input = false
 local restart_game_timer = 0
 
 local actions = {}
-local hit_button, stand_button, double_down_button, surrender_button
+local hit_button, stand_button, split_button, double_down_button, surrender_button
 
 local lose_sfx, win_sfx, card_sfx
 local cascades = {}
@@ -61,14 +61,25 @@ function restart()
 end
 
 function loadGame()
-	win_sfx = love.audio.newSource("assets/sfx/level_up.wav", "static")
-	lose_sfx = love.audio.newSource("assets/sfx/ghostly_laugh.wav", "static")
+	local font_parent = "assets/Fonts/"
+	local font = "Balls Of Bastille.otf"
+	font = "Bristol and Bath.ttf"
+	font = "coder's crux.otf"
+	font = "Fosterama.otf"
+	game_font_location = font_parent .. font
+	game_font_size = 24
+	game_font = love.graphics.newFont(game_font_location, game_font_size)
+	game_font:setFilter("nearest", "nearest")
+	love.graphics.setFont(game_font)
+
+	win_sfx = love.audio.newSource("assets/SFX/level_up.wav", "static")
+	lose_sfx = love.audio.newSource("assets/SFX/ghostly_laugh.wav", "static")
 	card_sfx = 
 	{
-		love.audio.newSource("assets/sfx/sndHit1.wav", "static"),
-		love.audio.newSource("assets/sfx/sndHit2.wav", "static"),
-		love.audio.newSource("assets/sfx/sndHit3.wav", "static"),
-		love.audio.newSource("assets/sfx/sndHit4.wav", "static")
+		love.audio.newSource("assets/SFX/sndHit1.wav", "static"),
+		love.audio.newSource("assets/SFX/sndHit2.wav", "static"),
+		love.audio.newSource("assets/SFX/sndHit3.wav", "static"),
+		love.audio.newSource("assets/SFX/sndHit4.wav", "static")
 	}
 	game_over_text = ""
 	deck = {}
@@ -83,56 +94,69 @@ function loadGame()
 	local button_start = 25
 	
 	button_start = createHitButton(button_start)
-	button_start = createStandButton(button_start) + 200
+	button_start = createStandButton(button_start)
+	button_start = createSplitButton(button_start)
 	button_start = createDoubleDownButton(button_start)
 	button_start = createSurrenderButton(button_start)
 
-	buttons = {hit_button, stand_button, double_down_button, surrender_button}
+	if peekDeckForSplit() then
+		buttons = {hit_button, stand_button, split_button, double_down_button, surrender_button}
+	else
+		buttons = {hit_button, stand_button, double_down_button, surrender_button}
+	end
 	cash = cash - initial_bet
 	this_bet = initial_bet
 
-	-- draw first 2 cards
+	-- draw first 2 Cards
 	local draw_action = Action(draw, 1, 0.25, Action(draw, 1, 1))
 	table.insert(actions, draw_action)
 end
-
+function peekDeckForSplit()
+	return deck[#deck].value == deck[#deck - 1].value
+end
 function love.load()
 	loadGame()
 end
 
 function createHitButton(button_start)
 	local width = 75
-	hit_button = Button(button_start, screen_height - 40, width, 30, "Hit", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0})
+	hit_button = Button(button_start, screen_height - 40, width, 30, "Hit", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	hit_button.clicked = function() draw() end
 	return button_start + width + 25
 end
 
 function createStandButton(button_start)
 	local width = 75
-	stand_button = Button(button_start, screen_height - 40, width, 30, "Stand", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0})
+	stand_button = Button(button_start, screen_height - 40, width, 30, "Stand", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	stand_button.clicked = function() stand() end
+	return button_start + width + 25
+end
+
+function createSplitButton(button_start)
+	local width = 75
+	split_button = Button(button_start, screen_height - 40, width, 30, "Split", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	return button_start + width + 25
 end
 
 function createDoubleDownButton(button_start)
 	local width = 150
-	double_down_button = Button(button_start, screen_height - 40, width, 30, "Double Down", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0})
+	double_down_button = Button(button_start, screen_height - 40, width, 30, "Double Down", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	double_down_button.clicked = function() doubleDown() end
 	return button_start + width + 25
 end
 
 function createSurrenderButton(button_start)
 	local width = 150
-	surrender_button = Button(button_start, screen_height - 40, width, 30, "Surrender", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0})
+	surrender_button = Button(button_start, screen_height - 40, width, 30, "Surrender", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	surrender_button.clicked = function() surrender() end
 	return button_start + width + 25
 end
 
 function buildDeck()
-	card_back = love.graphics.newImage("assets/cards/card_back_dark_inner.png")
+	card_back = love.graphics.newImage("assets/Cards/card_back_dark_inner.png")
 	for index, suit in ipairs(suits) do
 		for cardIndex = 1, 13 do
-			local card = Card(cardIndex, suit, card_back, "assets/cards/card_" .. suit .. "_" .. cardIndex .. ".png")
+			local card = Card(cardIndex, suit, card_back, "assets/Cards/card_" .. suit .. "_" .. cardIndex .. ".png")
 			table.insert(deck, card)
 		end
 	end
@@ -148,6 +172,17 @@ function love.mousepressed(x, y, button, isTouch)
 			buttons[button]:clicked()
 		end
 	end
+end
+
+function love.keypressed(key)
+	if key == "up" then
+		game_font_size = game_font_size + 1
+	elseif key == "down" then
+		game_font_size = game_font_size - 1
+	end
+	game_font = love.graphics.newFont(game_font_location, game_font_size)
+	love.graphics.setFont(game_font)
+	print(game_font_size)
 end
 
 function love.update(dt)
@@ -180,7 +215,6 @@ function checkRestartTimer(dt)
 	if restart_game_timer > 0 then
 		restart_game_timer = restart_game_timer - dt
 		if restart_game_timer <= 0 then
-			print("restarting!")
 			restart()
 		end
 	end
@@ -192,13 +226,13 @@ function createCascadeIn()
 							local last_pos = cascades[#cascades]
 							local new_pos
 							if last_pos then
-								new_pos = {x = last_pos.x + 60, y = last_pos.y}
+								new_pos = {x = last_pos.x + 75, y = last_pos.y}
 							else
 								new_pos = {x = -30, y = -30}
 							end
 							if new_pos.x > screen_width then
 								new_pos.x = 0
-								new_pos.y = new_pos.y + 75
+								new_pos.y = new_pos.y + 110
 							end
 							if new_pos.y <= screen_height then
 								table.insert(cascades, new_pos)
@@ -229,6 +263,7 @@ function createCascadeOut()
 end
 
 function love.draw()
+	love.graphics.clear(0.055, 0.333, 0.157)
 	for button = 1, #buttons do
 		buttons[button]:draw()
 	end
@@ -245,14 +280,18 @@ function love.draw()
 		dealerHand[card]:draw()
 	end
 
+
+	drawTextElements()
+	drawCascade()
+end
+
+function drawTextElements()
 	love.graphics.print(game_over_text, screen_width * 0.75, screen_height * 0.5 - 20)
 	love.graphics.print("score: " .. score, screen_width * 0.75, screen_height * 0.5)
 	if show_dealer_score then
 		love.graphics.print("dealer score: " .. dealer_score, screen_width * 0.75, screen_height * 0.5 + 20)
 	end
 	love.graphics.print("cash: " .. cash, screen_width * 0.75, screen_height * 0.5 + 40)
-
-	drawCascade()
 end
 
 function printDeck()
@@ -368,7 +407,7 @@ function setupRestart(text)
 end
 
 function adjustDealerHand()
-	local offset = 20
+	local offset = 30
 	local total_offset = offset * #dealerHand
 	for card = 1, #dealerHand do
 		dealerHand[card]:moveToPosition({x = 0.5 * screen_width + offset * card - total_offset, y = screen_height - 300 - offset * card + 0.5 * total_offset})
@@ -376,7 +415,7 @@ function adjustDealerHand()
 end
 
 function adjustHand()
-	local offset = 20
+	local offset = 30
 	local total_offset = offset * #hand
 	for card = 1, #hand do
 		hand[card]:moveToPosition({x = 0.5 * screen_width + offset * card - total_offset, y = screen_height - 100 - offset * card + 0.5 * total_offset})
@@ -384,7 +423,7 @@ function adjustHand()
 end
 
 function adjustDeck()
-	local offset = 10
+	local offset = 20
 	local total_offset = offset * #deck
 
 	for card = 1, #deck do
@@ -393,7 +432,6 @@ function adjustDeck()
 end
 
 function drawCascade()
---	print(cascade_draw_index)
 	for position = cascade_draw_index, #cascades do
 		love.graphics.draw(card_back, cascades[position].x, cascades[position].y, 0.15, 0.15, 0.15)
 	end
