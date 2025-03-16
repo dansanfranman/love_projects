@@ -1,6 +1,7 @@
 io.stdout:setvbuf("no")
 
 local Card = require("card")
+local Chip = require("chip")
 local Button = require("button")
 local Action = require("action")
 
@@ -15,6 +16,7 @@ local suits = {
 local game_over_text
 local score = 0
 local dealer_score = 0
+local show_score = false
 local show_dealer_score = false
 local cash = 200
 local initial_bet = 10
@@ -23,7 +25,10 @@ local disable_input = false
 local restart_game_timer = 0
 
 local actions = {}
+local buttons = {}
+local chips = {}
 local hit_button, stand_button, split_button, double_down_button, surrender_button
+local betting_zone
 
 local lose_sfx, win_sfx, card_sfx
 local cascades = {}
@@ -62,10 +67,7 @@ end
 
 function loadGame()
 	local font_parent = "assets/Fonts/"
-	local font = "Balls Of Bastille.otf"
-	font = "Bristol and Bath.ttf"
-	font = "coder's crux.otf"
-	font = "Fosterama.otf"
+	local font = "Bristol and Bath.ttf"
 	game_font_location = font_parent .. font
 	game_font_size = 24
 	game_font = love.graphics.newFont(game_font_location, game_font_size)
@@ -87,12 +89,21 @@ function loadGame()
 	dealerHand = {}
 
 	screen_width, screen_height = love.graphics.getDimensions()
+	createChips()
 	buildDeck()
 	shuffleDeck()
 	adjustDeck()
 
-	local button_start = 25
-	
+	setBettingZone()
+	placeBet()
+end
+
+function setBettingZone()
+	betting_zone = {x = screen_width * 0.65, y = screen_height * 0.25, w = screen_width * 0.2, h = screen_height * 0.6, r = 5}
+end
+
+function placeBet()
+	local button_start = screen_height * 0.4 
 	button_start = createHitButton(button_start)
 	button_start = createStandButton(button_start)
 	button_start = createSplitButton(button_start)
@@ -107,49 +118,67 @@ function loadGame()
 	cash = cash - initial_bet
 	this_bet = initial_bet
 
+	show_score = true
 	-- draw first 2 Cards
 	local draw_action = Action(draw, 1, 0.25, Action(draw, 1, 1))
 	table.insert(actions, draw_action)
 end
+
 function peekDeckForSplit()
 	return deck[#deck].value == deck[#deck - 1].value
 end
+
 function love.load()
 	loadGame()
 end
 
+function createChips()
+	local black = {0, 0, 0, 1}
+	local white = {1, 1, 1, 1}
+
+	chips = {
+		Chip(1, screen_width - 100, screen_height - 100, game_font, white),
+		Chip(5, screen_width - 100, screen_height - 200, game_font, black),
+		Chip(10, screen_width - 100, screen_height - 300, game_font, black),
+		Chip(50, screen_width - 100, screen_height - 400, game_font, black),
+		Chip(100, screen_width - 100, screen_height - 500, game_font, black),
+		Chip(500, screen_width - 100, screen_height - 600, game_font, black),
+		Chip(1000, screen_width - 100, screen_height - 700, game_font,black)
+	}
+end
+
 function createHitButton(button_start)
-	local width = 75
-	hit_button = Button(button_start, screen_height - 40, width, 30, "Hit", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
+	local height = 50 
+	hit_button = Button(50, button_start, 175, height, "Hit", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	hit_button.clicked = function() draw() end
-	return button_start + width + 25
+	return button_start + height + 25
 end
 
 function createStandButton(button_start)
-	local width = 75
-	stand_button = Button(button_start, screen_height - 40, width, 30, "Stand", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
+	local height = 50
+	stand_button = Button(50, button_start, 175, height, "Stand", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	stand_button.clicked = function() stand() end
-	return button_start + width + 25
+	return button_start + height + 25
 end
 
 function createSplitButton(button_start)
-	local width = 75
-	split_button = Button(button_start, screen_height - 40, width, 30, "Split", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
-	return button_start + width + 25
+	local height = 50
+	split_button = Button(50, button_start, 175, height, "Split", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
+	return button_start + height + 25
 end
 
 function createDoubleDownButton(button_start)
-	local width = 150
-	double_down_button = Button(button_start, screen_height - 40, width, 30, "Double Down", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
+	local height = 50
+	double_down_button = Button(50, button_start, 175, height, "Double Down", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	double_down_button.clicked = function() doubleDown() end
-	return button_start + width + 25
+	return button_start + height + 25
 end
 
 function createSurrenderButton(button_start)
-	local width = 150
-	surrender_button = Button(button_start, screen_height - 40, width, 30, "Surrender", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
+	local height = 50
+	surrender_button = Button(50, button_start, 175, height, "Surrender", {r = 1, g = 1, b = 1}, {r = 0, g = 0, b = 0}, game_font)
 	surrender_button.clicked = function() surrender() end
-	return button_start + width + 25
+	return button_start + height + 25
 end
 
 function buildDeck()
@@ -167,9 +196,25 @@ function love.mousepressed(x, y, button, isTouch)
 		return
 	end
 
+	for chip = #chips, 1, -1 do
+		if chips[chip]:checkCollision(x, y) then
+			chips[chip]:clicked()
+			break
+		end
+	end
+
 	for button = 1, #buttons do
 		if buttons[button]:checkCollision(x, y) then
 			buttons[button]:clicked()
+		end
+	end
+end
+
+function love.mousereleased(x, y, button, isTouch)
+	for chip = 1, #chips do
+		if chips[chip].isClicked then
+			chips[chip]:released(betting_zone)
+			break
 		end
 	end
 end
@@ -182,7 +227,6 @@ function love.keypressed(key)
 	end
 	game_font = love.graphics.newFont(game_font_location, game_font_size)
 	love.graphics.setFont(game_font)
-	print(game_font_size)
 end
 
 function love.update(dt)
@@ -192,6 +236,15 @@ function love.update(dt)
 
 	for action = 1, #actions do
 		actions[action]:update(dt)
+	end
+
+	local mouse_pos_x, mouse_pos_y = love.mouse.getPosition()
+	for chip = 1, #chips do
+		chips[chip]:update(dt, mouse_pos_x, mouse_pos_y)
+	end
+
+	for button = 1, #buttons do
+		buttons[button]:update(dt, mouse_pos_x, mouse_pos_y)
 	end
 end
 
@@ -263,7 +316,11 @@ function createCascadeOut()
 end
 
 function love.draw()
+	
 	love.graphics.clear(0.055, 0.333, 0.157)
+
+	love.graphics.rectangle("line", betting_zone.x, betting_zone.y, betting_zone.w, betting_zone.h, betting_zone.r, betting_zone.r)
+
 	for button = 1, #buttons do
 		buttons[button]:draw()
 	end
@@ -280,18 +337,25 @@ function love.draw()
 		dealerHand[card]:draw()
 	end
 
+	for chip = 1, #chips do
+		chips[chip]:draw()
+	end
 
 	drawTextElements()
 	drawCascade()
 end
 
 function drawTextElements()
-	love.graphics.print(game_over_text, screen_width * 0.75, screen_height * 0.5 - 20)
-	love.graphics.print("score: " .. score, screen_width * 0.75, screen_height * 0.5)
-	if show_dealer_score then
-		love.graphics.print("dealer score: " .. dealer_score, screen_width * 0.75, screen_height * 0.5 + 20)
+	love.graphics.print(game_over_text, screen_width * 0.5, screen_height * 0.5)
+	love.graphics.print("DRAG CHIPS HERE\nTO BET", betting_zone.x + betting_zone.w * 0.5, betting_zone.y + betting_zone.h * 0.5)
+
+	if show_score then
+		love.graphics.print("SCORE: " .. score, screen_width * 0.35, screen_height - 100)
 	end
-	love.graphics.print("cash: " .. cash, screen_width * 0.75, screen_height * 0.5 + 40)
+
+	if show_dealer_score then
+		love.graphics.print("SCORE: " .. dealer_score, screen_width * 0.6, 300)
+	end
 end
 
 function printDeck()
@@ -409,8 +473,9 @@ end
 function adjustDealerHand()
 	local offset = 30
 	local total_offset = offset * #dealerHand
+
 	for card = 1, #dealerHand do
-		dealerHand[card]:moveToPosition({x = 0.5 * screen_width + offset * card - total_offset, y = screen_height - 300 - offset * card + 0.5 * total_offset})
+		dealerHand[card]:moveToPosition({x = 0.5 * screen_width + offset * card - total_offset, y = screen_height * 0.4 - offset * card + 0.5 * total_offset})
 	end
 end
 
